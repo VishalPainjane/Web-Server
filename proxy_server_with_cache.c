@@ -61,8 +61,13 @@ cache_element *head;
 int cache_size;
 
 int main (int argc, char* argv[]){
+    // printf("%d\n", argc);
+    // for(int i=0;i<argc;++i){
+    //     printf("%s\n", argv[i]);
+    // }
+
     int client_socketId, client_len;
-    struct sockaddr server_addr, client_addr; // pre-defined structure for address
+    struct sockaddr_in server_addr, client_addr; // pre-defined structure for address
     
     sem_init(&semaphore, 0,MAX_CLIENTS); // setup semaphore
     pthread_mutex_init(&lock, NULL); // setup mutex, set as default NULL, else it will be set as garbage value
@@ -86,7 +91,27 @@ int main (int argc, char* argv[]){
     proxy_socketId = socket(AF_INET, SOCK_STREAM, 0); //this uses IPv4, and happend accrose TCP connection(secured connection, hand shake)
 
     if (proxy_socketId==0){
-        perror("Failed to create a ")
+        perror("Failed to create socket")
     }
+
+    int reuse = 1;
+    if(setsockopt(proxy_socketId, SOL_SOCKET, SO_REUSEADDR, (const char*)&reuse, sizeof(reuse))<0){
+        perror('setSockOpt Failed\n');
+    }
+
+    bzero((char*)&server_addr, sizeof(server_addr)); // where ever we create and init struck in C, it will hold garbage value, so we have to clear(init it with 0)
+
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(port_number); //htons in used for the machine understand the port number in simple terms
+    server_addr.sin_addr.s_addr = INADDR_ANY; // in this scoket, this server address which is going to communicate to another server, address of another server will be set to anything
+
+    if(bind(proxy_scoketId, (struct sockaddr*)&server_addr, sizeof(server_addr)) < 0){
+        perror("Port is not available\n");
+        exit(1);
+    }
+
+    printf("Binding on port %d\n", port_number);
+    
+
 
 }
