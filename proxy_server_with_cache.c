@@ -20,7 +20,7 @@
 
 typedef struct cache_element cache_element; // through this, it will replace (struct cache_element) -> (cache_element)
 
-struct cache_element(
+struct cache_element{
     char* data;
     int len;
     char* url;
@@ -30,7 +30,7 @@ struct cache_element(
     this is a linked list that will store elements(mainly the urls and its info into a block)
 
     */
-);
+};
 
 cache_element* find(char* url);
 int add_cache_element(char* data, int size, char* url);
@@ -44,8 +44,8 @@ proxy server will have different sockets, so when ever someone
 is requesting something from the server, it will communicate via sockets
 */
 int port_number = 8080;
-int proxy_socket_id;
-pthread_t tid[MAX_CLIENTS]
+int proxy_socketId;
+pthread_t tid[MAX_CLIENTS];
 sem_t semaphore;
 pthread_mutex_t lock;
 /*
@@ -57,12 +57,36 @@ and SEMAPHORE(multi valued) is number if users at start(i.e 10) which will decre
 then all the request that arives after it will be in WAITING STATE
 */
 
-cache_elemtnt* head;
+cache_element *head;
 int cache_size;
 
 int main (int argc, char* argv[]){
     int client_socketId, client_len;
-    struct sockaddr server_addr, client_addr;
-    sem_init(&semaphore, MAX_CLIENTS);
+    struct sockaddr server_addr, client_addr; // pre-defined structure for address
     
+    sem_init(&semaphore, 0,MAX_CLIENTS); // setup semaphore
+    pthread_mutex_init(&lock, NULL); // setup mutex, set as default NULL, else it will be set as garbage value
+
+    if (argc==2){
+    port_number= atoi(argv[1]); // atoi - this will parse the cmd and provide it as str
+    // example==> ./proxy 8090
+    }else{
+        printf("Too few Arguments\n");
+        exit(1); // system calls, this will exit the server
+    }
+
+    printf("Starging proxy server at port: %d\n", port_number);
+
+
+    /* 
+    proxy will have only 1 socket,to which evey client will request
+    as soon as the request gets accepted, it will spawn a new thread(with new threadid)
+    through that new spawned socket, all the info will be transmited
+    */
+    proxy_socketId = socket(AF_INET, SOCK_STREAM, 0); //this uses IPv4, and happend accrose TCP connection(secured connection, hand shake)
+
+    if (proxy_socketId==0){
+        perror("Failed to create a ")
+    }
+
 }
