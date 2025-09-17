@@ -17,6 +17,7 @@
 #include<time.h>
 
 #define MAX_CLIENTS 10
+#define MAX_BYTES (1<<12)
 
 typedef struct cache_element cache_element; // through this, it will replace (struct cache_element) -> (cache_element)
 
@@ -59,6 +60,150 @@ then all the request that arives after it will be in WAITING STATE
 
 cache_element *head;
 int cache_size;
+
+
+int connectRemoteServer(char* host_addr, int port_num){
+    int remotesocket = socket(AF_INET, SOCK_STREAM, 0);
+    if(remotesocket<0){
+        printf("Error in creating your socket\n");
+    }
+    struct hostent* host = gethostbyname(host_addr);
+    if(host==NULL){
+        fprintf(strerr, "No such host exist\n");
+        return -1;
+    }
+    struct sockaddr_in server_addr;
+    bzero((char *)&server_addr, sizeof(server_addr));
+    server_addr.sin_family = AF_INET;
+    server_addr.sin_port = htons(port_num);
+
+    bcopy((char *)&host->h_addr, (char *)&server_addr.sin_addr, host->h_lenght);
+    if(connect(remotesocket, (struct sockaddr *)&server_addr, (size_t)sizeof(server_addr)<0)){
+        fprintf(stderr, "Error in connecting\n");
+        return -1;
+    }
+
+    return remotesocket;
+}
+
+int handle_request(int client_socketId, ParsedRequest *req, char* tempreq){
+    char *buf = (char *)malloc(sizeof(char)*MAX_BYTES);
+    strcpy(buf, "GET");
+    strcat(buf, req->path);
+    strcat(buf, " ");
+    strcat(buf, req->version);
+    strcat(buf, "\r\n");
+
+    size_t len = strlen(buf);
+
+    if(ParsedHeader_set(req, "Connection", "close")<0){
+        printf("set header key is not working");
+    }
+
+    if(ParsedHeader_get(req, "Host") == NULL){
+        if(ParsedHeader_set(req, "Host", req->version)<0){
+            printf("set host header key is not working");
+        }
+    }
+
+    if(ParsedRequest_unparse_headers(req, buf+len, (size_t)MAX_BYTES-len)<0){
+        printf("unparse Failed");
+    }
+
+    int server_port = 80;
+    if(req->port!=NULL){
+        server_port = atoi(req->port);
+    }
+
+    int remotesockteid = connectRemoteServer(req->host, server_port);
+
+}
+
+void *thread_function(void *socketnew){
+    sem_wait(&semaphore);
+    int p;
+    sem_getval(&semaphore, p);
+    printf("semaphore val is; %d\n", p);
+    int *t = (int*) socketnew;
+    int socket = *t;
+    int bytes_send_client , len;
+
+    char *buffer = (char*)calloc(MAX_BYTES, sizeof(char));
+    bzero(buffer, MAX_BYTES);
+    bytes_send_client = recive(socket, buffer, MAX_BYTES, 0);
+
+    while(bytes_send_client > 0){
+        len = strlen(buffer);
+        if(strstr(buffer, "\r\n\r\n") == NULL){
+            bytes_send_client = recv(socket, buffer+len, MAX_BYTES-len, 0);
+        }else{
+        break;
+        }
+    }
+
+    char * tempreq = (char *)malloc(strlen(buffer)*strlen(sizeof(char)+1));
+
+    for(int i = 1; i<strlen(buffer);i++){
+        tempreq[i] = buffer[i];
+    }
+
+    struct cache_element* temp = find(tempreq);
+    if(temp!=NULL){
+        int size = temp->len/sizeof(char);
+        int pos = 0;
+        char response[MAX_BYTES];
+        while(pos<size){
+            bzero(response, MAX_BYTES);
+            for(int i =0;i<MAX_BYTES;i++){
+                response[i] = temp->data[i];
+                pos++;
+            }
+            send(socket, response, MAX_BYTES, 0);
+        }
+
+        printf("data retrived from cache\n");
+        printf("%s\n\n", response);
+
+    }
+    else if(bytes_send_client){
+        len = strlen(buffer);
+        ParsedRequest *req = ParsedRequest_parse();
+
+        if(ParsedRequest_parse(req, buffer,len) < 0){
+            printf("Parsing Falied\n");
+        }
+        else{
+            bzero(buffer, MAX_BYTES);
+            if(!strcmp(reqest->method, "GET")){
+                if(req->host && req->path & checkHTTPversion(req->version) == 1){
+                    bytes_send_client = handle_request(socket, req, tempreq);
+                    if(bytes_send_client == -1){
+                        sendErrorMessage(socket, 500);
+                    }
+                }
+                else{
+                    sendErrorMessage(socket, 500);
+                }
+            }
+            else{
+                printf("this code doesn't support any method apart from GET\n");
+            }
+        }
+
+        ParsedRequest_destroy(req);
+    }else if(bytes_send_client == 0){
+        printf("client disconnected");
+
+    }
+    shutdown(socket, SHUT_RDWR);
+    close(socket);
+    free(buffer);
+    sem_post(&semaphore);
+    sem_getval(&semaphore, p);
+    printf("semaphore post values is %d", p);
+    free(tempreq);
+    return NULL;
+}
 
 int main (int argc, char* argv[]){
     // printf("%d\n", argc);
@@ -112,6 +257,41 @@ int main (int argc, char* argv[]){
 
     printf("Binding on port %d\n", port_number);
     
+    int listen_status = listen(proxy_socketId, MAX_CLIENTS);
 
+    if(listen_status<0){
+        printf("Error in listening\n");
+        exit(1);
+    }
+
+    int i = 0;
+    int Connect_socketId[MAX_CLIENTS];
+
+    while(1){
+        bzero((char*) &client_addr, sizeof(client_addr));
+        client_len = sizeof(client_addr);
+        client_socketId = accept(proxy_scoketId, (struct *sockaddr)&client_addr, (socklen_t*)&client_len);
+        
+        if(listen_status<0){
+            printf("Not able to connect socket\n");
+            exit(1);
+        }else{
+            Connect_socketId[i] = client_socketId;
+        }
+
+        struct sockaddr_in * client_pt = (struct sockaddr_in*)&client_addr;
+        struct in_addr ip_addr = client->sin_addr;
+        char str[INET_ADDRSTRLEN];
+        inet_ntop(AF_INET, &ip_addr, str, INET_ADDRSTRLEN);
+
+        printf("Client is connected with port number %d and ip address %s\n", ntohs(client_addr.sin_port), str);
+
+        pthread_create(&tid[i], NULL, thread_function, (void *)&Connect_socketId[i]);
+        i++;
+
+        }
+
+        close(proxy_socketId);
+        return 0;
 
 }
